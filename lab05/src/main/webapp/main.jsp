@@ -11,6 +11,9 @@
 </head>
 <header>
     <%=new Date()%>
+    <form method="post">
+            <input type="submit" name="exitBtn" value="Exit" />
+        </form>
 </header>
 <body>
 <h1>${rootFile.absolutePath}</h1>

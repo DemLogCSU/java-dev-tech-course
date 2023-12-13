@@ -1,9 +1,11 @@
 package site.dlsky;
 
+import site.dlsky.models.User;
+import site.dlsky.repository.UserRepository;
+
 import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -18,6 +20,8 @@ import java.nio.file.attribute.BasicFileAttributes;
 
 public class MainServlet extends HttpServlet {
 
+    private static final String FILES_ROOT = System.getProperty("user.home") + "/";
+
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
@@ -30,41 +34,51 @@ public class MainServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        String pathParam = req.getParameter("path");
+        User user = UserRepository.USER_REPOSITORY.getUserByCookies(req.getCookies());
+        if(user == null) {
+            resp.sendRedirect("/login");
+        } else {
+            String pathParam = req.getParameter("path");
 
-        System.out.println(pathParam);
-        Path path = null;
-        if (pathParam != null) path = Paths.get(pathParam).toAbsolutePath();
+            if (pathParam == null || !pathParam.startsWith(FILES_ROOT + user.getLogin())) {
+                pathParam = createDirectory(user.getLogin());
+            }
 
-        if (path == null || pathParam.equals("null") || !path.toString().startsWith(System.getProperty("user.home")))
-        {
-            pathParam = System.getProperty("user.home");
+            System.out.println(pathParam);
+            Path path = Paths.get(pathParam).toAbsolutePath();
+
+            if (!Files.exists(path))
+            {
+                resp.setStatus(404);
+                resp.getWriter().write("Incorrect path");
+                return;
+            }
+
+            File rootFile = path.toFile();
+            if(!rootFile.isDirectory())
+            {
+                loadFile(resp,rootFile);
+                return;
+            }
+            File[] subFiles = rootFile.listFiles();
+
+            req.setAttribute("files", subFiles);
+            req.setAttribute("rootFile", rootFile);
+            req.setAttribute("attrs", Files.readAttributes(path, BasicFileAttributes.class));
+            req.setAttribute("parentPath", req.getServletPath() + "?path=" + rootFile.getParent());
+
+            RequestDispatcher requestDispatcher = req.getRequestDispatcher("main.jsp");
+            requestDispatcher.forward(req, resp);
         }
+    }
 
-        path = Paths.get(pathParam).toAbsolutePath();
-
-        if (!Files.exists(path))
-        {
-            resp.setStatus(404);
-            resp.getWriter().write("Incorrect path");
-            return;
+    private String createDirectory(String login) {
+        String directoryPath = FILES_ROOT + login;
+        File directory = new File(directoryPath);
+        if (!directory.exists()) {
+            directory.mkdir();
         }
-
-        File rootFile = path.toFile();
-        if(!rootFile.isDirectory())
-        {
-            loadFile(resp,rootFile);
-            return;
-        }
-        File[] subFiles = rootFile.listFiles();
-
-        req.setAttribute("files", subFiles);
-        req.setAttribute("rootFile", rootFile);
-        req.setAttribute("attrs", Files.readAttributes(path, BasicFileAttributes.class));
-        req.setAttribute("parentPath", req.getServletPath() + "?path=" + rootFile.getParent());
-
-        RequestDispatcher requestDispatcher = req.getRequestDispatcher("main.jsp");
-        requestDispatcher.forward(req, resp);
+        return directoryPath;
     }
 
     private void loadFile(HttpServletResponse resp, File file) throws IOException {
@@ -80,5 +94,14 @@ public class MainServlet extends HttpServlet {
         }
         in.close();
         out.flush();
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        if(req.getParameter("exitBtn") != null) {
+            UserRepository.USER_REPOSITORY.removeUserBySession(MyCookie.getValue(req.getCookies(), "JSESSIONID"));
+            MyCookie.addCookie(resp, "JSESSIONID", null);
+            resp.sendRedirect("/");
+        }
     }
 }
