@@ -1,0 +1,60 @@
+version: "3"
+
+volumes:
+  postgres-data-volume:
+    driver: local
+
+services:
+
+  # TODO сервис nginx на локальном порту 22000, смапить nginx-data/upstreams.conf в /etc/nginx/conf.d/upstreams.conf
+  nginx:
+    container_name: nginx.service
+    build:
+      context: nginx
+    ports:
+      - 22000:80
+    volumes:
+      - ./nginx-data/upstreams.conf:/etc/nginx/conf.d/upstreams.conf
+
+  postgres:
+    container_name: postgres.service
+    restart: always
+    build:
+      context: postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: example
+    ports:
+      - 22001:5432
+    volumes:
+      - postgres-data-volume:/var/lib/postgresql/data
+
+  frontend:
+    container_name: frontend.service
+    build:
+      context: frontend
+    ports:
+      - 22002:3000
+    volumes:
+      - ./frontend/:/app/
+
+  backend1:
+    container_name: backend1.service
+    build:
+      context: backend
+    ports:
+      - 22003:7000
+    volumes:
+      - ./backend1-data/application.properties:/app/application.properties
+
+  # TODO сервис backend2 на локальном порту 22004, внешний конфиг взять из backend2-data
+
+  backend2:
+    container_name: backend2.service
+    build:
+      context: backend
+    ports:
+      - 22004:7000
+    volumes:
+      - ./backend2-data/application.properties:/app/application.properties
